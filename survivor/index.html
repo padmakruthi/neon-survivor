@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Survivor</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            cursor: crosshair;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            text-shadow: 0 0 10px #0ff;
+            font-size: 28px;
+            font-weight: bold;
+            pointer-events: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">SCORE: <span id="score">0</span></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+
+        let width, height;
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let mouse = { x: width / 2, y: height / 2 };
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        // Game state variables
+        let score = 0;
+        let player;
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        let lastTime = 0;
+        let enemySpawnTimer = 0;
+        let enemySpawnInterval = 1000;
+        let fireTimer = 0;
+        const fireInterval = 150; // Fire rate
+
+        // Simple 2D Vector class for math operations
+        class Vector {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+            add(v) { return new Vector(this.x + v.x, this.y + v.y); }
+            sub(v) { return new Vector(this.x - v.x, this.y - v.y); }
+            mult(n) { return new Vector(this.x * n, this.y * n); }
+            mag() { return Math.sqrt(this.x * this.x + this.y * this.y); }
+            normalize() {
+                const m = this.mag();
+                return m === 0 ? new Vector(0, 0) : new Vector(this.x / m, this.y / m);
+            }
+            dist(v) { return this.sub(v).mag(); }
+        }
+
+        class Player {
+            constructor() {
+                this.pos = new Vector(width / 2, height / 2);
+                this.speed = 3;
+                this.size = 15;
+            }
+            update() {
+                // Move towards mouse cursor
+                const target = new Vector(mouse.x, mouse.y);
+                const dir = target.sub(this.pos);
+                if (dir.mag() > this.speed) {
+                    this.pos = this.pos.add(dir.normalize().mult(this.speed));
+                } else {
+                    this.pos = target;
+                }
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.pos.x, this.pos.y);
+                
+                // Point towards the mouse cursor
+                const angle = Math.atan2(mouse.y - this.pos.y, mouse.x - this.pos.x);
+                ctx.rotate(angle);
+
+                // Neon wireframe drawing
+                ctx.strokeStyle = '#0ff';
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#0ff';
+                ctx.beginPath();
+                ctx.moveTo(this.size, 0);
+                ctx.lineTo(-this.size, this.size);
+                ctx.lineTo(-this.size, -this.size);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        class Enemy {
+            constructor() {
+                // Spawn randomly on the edges just outside the screen
+                if (Math.random() < 0.5) {
+                    this.pos = new Vector(Math.random() < 0.5 ? -30 : width + 30, Math.random() * height);
+                } else {
+                    this.pos = new Vector(Math.random() * width, Math.random() < 0.5 ? -30 : height + 30);
+                }
+                this.size = 12;
+                this.speed = 1.5 + Math.random() * 1.5;
+            }
+            update(playerPos) {
+                // Move directly towards player
+                const dir = playerPos.sub(this.pos).normalize();
+                this.pos = this.pos.add(dir.mult(this.speed));
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.pos.x, this.pos.y);
+                ctx.strokeStyle = '#f00';
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#f00';
+                ctx.beginPath();
+                ctx.rect(-this.size, -this.size, this.size * 2, this.size * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        class Bullet {
+            constructor(pos, targetPos) {
+                this.pos = new Vector(pos.x, pos.y);
+                this.dir = targetPos.sub(this.pos).normalize();
+                this.speed = 10;
+                this.size = 4;
+                this.life = 100;
+            }
+            update() {
+                this.pos = this.pos.add(this.dir.mult(this.speed));
+                this.life--;
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.pos.x, this.pos.y);
+                ctx.fillStyle = '#ff0';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#ff0';
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y) {
+                this.pos = new Vector(x, y);
+                this.vel = new Vector((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
+                this.life = 20 + Math.random() * 20;
+                this.maxLife = this.life;
+                this.size = 1 + Math.random() * 3;
+            }
+            update() {
+                this.pos = this.pos.add(this.vel);
+                this.vel = this.vel.mult(0.9); // friction
+                this.life--;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life / this.maxLife;
+                ctx.translate(this.pos.x, this.pos.y);
+                ctx.fillStyle = '#f00';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#f00';
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function init() {
+            player = new Player();
+            enemies = [];
+            bullets = [];
+            particles = [];
+            score = 0;
+            enemySpawnInterval = 1000;
+            scoreElement.innerText = score;
+            lastTime = performance.now();
+            requestAnimationFrame(loop);
+        }
+
+        function createExplosion(x, y) {
+            for (let i = 0; i < 20; i++) {
+                particles.push(new Particle(x, y));
+            }
+        }
+
+        function loop(time) {
+            const dt = time - lastTime;
+            lastTime = time;
+
+            // Semi-transparent black background to create motion blur trails
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            player.update();
+            player.draw();
+
+            // Spawn enemies based on timer
+            enemySpawnTimer += dt;
+            if (enemySpawnTimer > enemySpawnInterval) {
+                enemies.push(new Enemy());
+                enemySpawnTimer = 0;
+                // Increase difficulty slowly
+                if (enemySpawnInterval > 200) {
+                    enemySpawnInterval -= 5; 
+                }
+            }
+
+            // Auto-fire bullets
+            fireTimer += dt;
+            if (fireTimer > fireInterval && enemies.length > 0) {
+                // Calculate nearest enemy using Vector dist()
+                let nearest = null;
+                let minDist = Infinity;
+                for (const enemy of enemies) {
+                    const dist = player.pos.dist(enemy.pos);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = enemy;
+                    }
+                }
+                
+                if (nearest) {
+                    bullets.push(new Bullet(player.pos, nearest.pos));
+                    fireTimer = 0;
+                }
+            }
+
+            // Process bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.update();
+                b.draw();
+                
+                // Remove if off screen or dead
+                if (b.life <= 0 || b.pos.x < 0 || b.pos.x > width || b.pos.y < 0 || b.pos.y > height) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                // Check bullet collisions with enemies
+                let bulletHit = false;
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    let e = enemies[j];
+                    if (b.pos.dist(e.pos) < e.size + b.size) {
+                        createExplosion(e.pos.x, e.pos.y);
+                        enemies.splice(j, 1);
+                        bulletHit = true;
+                        score += 10;
+                        scoreElement.innerText = score;
+                        break; // bullet can only hit one enemy
+                    }
+                }
+                if (bulletHit) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // Process enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                e.update(player.pos);
+                e.draw();
+
+                // Check player collision with enemy (Game Over)
+                if (e.pos.dist(player.pos) < e.size + player.size - 5) {
+                    // Simple restart
+                    alert('Game Over! Your final score is: ' + score);
+                    init();
+                    return; 
+                }
+            }
+
+            // Process particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.update();
+                p.draw();
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        // Start game
+        init();
+    </script>
+</body>
+</html>
