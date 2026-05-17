@@ -142,14 +142,16 @@
     
     <div id="ui">
         SCORE: <span id="score">0</span><br>
-        TIME: <span id="time">0</span>s
+        TIME: <span id="time">0</span>s<br>
+        HEALTH: <span id="health">4</span>
     </div>
     
     <button id="exitBtn">EXIT</button>
     
-    <div id="leaderboard">
+    <div id="leaderboard" style="display: none;">
         <div class="leaderboard-title">TOP SURVIVORS</div>
         <div id="leaderboardList">Loading...</div>
+        <button id="downloadCsvBtn" style="margin-top:10px; padding:5px; background:#0ff; color:#000; border:none; cursor:pointer; font-family: inherit; font-weight: bold; width: 100%;">Download CSV</button>
     </div>
 
     <!-- 2D Game Canvas -->
@@ -231,10 +233,13 @@
         resize2d();
 
         let mouse = { x: width / 2, y: height / 2 };
+        let isMouseDown = false;
         window.addEventListener('mousemove', (e) => {
             mouse.x = e.clientX;
             mouse.y = e.clientY;
         });
+        window.addEventListener('mousedown', () => isMouseDown = true);
+        window.addEventListener('mouseup', () => isMouseDown = false);
 
         // Game state variables
         let score = 0;
@@ -243,7 +248,9 @@
         let player;
         let enemies = [];
         let bullets = [];
+        let enemyBullets = [];
         let particles = [];
+        let playerHealth = 4;
         let lastTime = 0;
         let enemySpawnTimer = 0;
         let enemySpawnInterval = 1000;
@@ -307,10 +314,16 @@
                 }
                 this.size = 12;
                 this.speed = 1.5 + Math.random() * 1.5;
+                this.fireTimer = Math.random() * 2000;
             }
-            update(playerPos) {
+            update(playerPos, dt) {
                 const dir = playerPos.sub(this.pos).normalize();
                 this.pos = this.pos.add(dir.mult(this.speed));
+                this.fireTimer += dt;
+                if (this.fireTimer > 3000) {
+                    enemyBullets.push(new EnemyBullet(this.pos, playerPos));
+                    this.fireTimer = 0;
+                }
             }
             draw() {
                 ctx2d.save();
@@ -322,6 +335,31 @@
                 ctx2d.beginPath();
                 ctx2d.rect(-this.size, -this.size, this.size * 2, this.size * 2);
                 ctx2d.stroke();
+                ctx2d.restore();
+            }
+        }
+
+        class EnemyBullet {
+            constructor(pos, targetPos) {
+                this.pos = new Vector(pos.x, pos.y);
+                this.dir = targetPos.sub(this.pos).normalize();
+                this.speed = 3;
+                this.size = 6;
+                this.life = 250;
+            }
+            update() {
+                this.pos = this.pos.add(this.dir.mult(this.speed));
+                this.life--;
+            }
+            draw() {
+                ctx2d.save();
+                ctx2d.translate(this.pos.x, this.pos.y);
+                ctx2d.fillStyle = '#f0f';
+                ctx2d.shadowBlur = 15;
+                ctx2d.shadowColor = '#f0f';
+                ctx2d.beginPath();
+                ctx2d.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx2d.fill();
                 ctx2d.restore();
             }
         }
@@ -382,8 +420,11 @@
             player = new Player();
             enemies = [];
             bullets = [];
+            enemyBullets = [];
             particles = [];
             score = 0;
+            playerHealth = 4;
+            document.getElementById('health').innerText = playerHealth;
             timeSurvived = 0;
             timeSurvivedMs = 0;
             enemySpawnInterval = 1000;
@@ -392,6 +433,7 @@
             lastTime = performance.now();
             isGameOver = false;
             document.getElementById('gameOverModal').style.display = 'none';
+            document.getElementById('leaderboard').style.display = 'none';
             fetchScores();
             requestAnimationFrame(loop);
         }
@@ -406,12 +448,30 @@
             isGameOver = true;
             document.getElementById('finalScore').innerText = score;
             document.getElementById('gameOverModal').style.display = 'block';
+            document.getElementById('leaderboard').style.display = 'block';
         }
 
         document.getElementById('exitBtn').addEventListener('click', () => {
             if (!isGameOver) {
                 gameOver();
             }
+        });
+
+        document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+            fetch('/api/scores')
+                .then(res => res.json())
+                .then(data => {
+                    let csv = 'Rank,Name,Score\n';
+                    data.forEach((row, i) => {
+                        csv += `${i+1},${row.name},${row.score}\n`;
+                    });
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.setAttribute('href', url);
+                    a.setAttribute('download', 'leaderboard.csv');
+                    a.click();
+                });
         });
 
         document.getElementById('submitScore').addEventListener('click', () => {
@@ -471,21 +531,9 @@
             }
 
             fireTimer += dt;
-            if (fireTimer > fireInterval && enemies.length > 0) {
-                let nearest = null;
-                let minDist = Infinity;
-                for (const enemy of enemies) {
-                    const dist = player.pos.dist(enemy.pos);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        nearest = enemy;
-                    }
-                }
-                
-                if (nearest) {
-                    bullets.push(new Bullet(player.pos, nearest.pos));
-                    fireTimer = 0;
-                }
+            if (isMouseDown && fireTimer > fireInterval) {
+                bullets.push(new Bullet(player.pos, new Vector(mouse.x, mouse.y)));
+                fireTimer = 0;
             }
 
             for (let i = bullets.length - 1; i >= 0; i--) {
@@ -515,14 +563,43 @@
                 }
             }
 
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                let eb = enemyBullets[i];
+                eb.update();
+                eb.draw();
+                
+                if (eb.life <= 0 || eb.pos.x < 0 || eb.pos.x > width || eb.pos.y < 0 || eb.pos.y > height) {
+                    enemyBullets.splice(i, 1);
+                    continue;
+                }
+
+                if (eb.pos.dist(player.pos) < eb.size + player.size - 5) {
+                    createExplosion(player.pos.x, player.pos.y);
+                    playerHealth--;
+                    document.getElementById('health').innerText = playerHealth;
+                    enemyBullets.splice(i, 1);
+                    if (playerHealth <= 0) {
+                        gameOver();
+                        return;
+                    }
+                }
+            }
+
             for (let i = enemies.length - 1; i >= 0; i--) {
                 let e = enemies[i];
-                e.update(player.pos);
+                e.update(player.pos, dt);
                 e.draw();
 
-                if (e.pos.dist(player.pos) < e.size + player.size - 5) {
-                    gameOver();
-                    return; 
+                if (!e.hitPlayer && e.pos.dist(player.pos) < e.size + player.size - 5) {
+                    e.hitPlayer = true;
+                    createExplosion(player.pos.x, player.pos.y);
+                    playerHealth--;
+                    document.getElementById('health').innerText = playerHealth;
+                    enemies.splice(i, 1);
+                    if (playerHealth <= 0) {
+                        gameOver();
+                        return; 
+                    }
                 }
             }
 
