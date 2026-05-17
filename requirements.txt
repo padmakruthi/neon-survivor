@@ -1,9 +1,1 @@
-fastapi
-uvicorn
-pandas
-numpy
-scikit-learn
-xgboost
-joblib
-openpyxl
-python-multipart
+Flask==3.0.0

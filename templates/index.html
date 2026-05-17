@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Survivor</title>
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            cursor: crosshair;
+        }
+        /* The Three.js canvas goes behind everything */
+        #bgCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+        /* The 2D game canvas */
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            /* Using pointer-events to let clicks go to 2d canvas, but actually this canvas handles mouse */
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            text-shadow: 0 0 10px #0ff;
+            font-size: 28px;
+            font-weight: bold;
+            pointer-events: none;
+            user-select: none;
+            z-index: 2;
+        }
+        #leaderboard {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            text-shadow: 0 0 10px #f0f;
+            font-size: 18px;
+            pointer-events: none;
+            user-select: none;
+            z-index: 2;
+            text-align: right;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #f0f;
+        }
+        .leaderboard-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #f0f;
+            padding-bottom: 5px;
+        }
+        .leaderboard-entry {
+            margin-bottom: 5px;
+        }
+        /* Modal for Game Over */
+        #gameOverModal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #0ff;
+            box-shadow: 0 0 20px #0ff;
+            padding: 30px;
+            text-align: center;
+            color: white;
+            z-index: 10;
+            display: none;
+        }
+        #gameOverModal h2 {
+            margin-top: 0;
+            color: #f00;
+            text-shadow: 0 0 10px #f00;
+        }
+        #playerName {
+            padding: 10px;
+            font-size: 18px;
+            background: #111;
+            border: 1px solid #0ff;
+            color: #0ff;
+            outline: none;
+            font-family: inherit;
+        }
+        #submitScore {
+            padding: 10px 20px;
+            font-size: 18px;
+            background: #0ff;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        #submitScore:hover {
+            box-shadow: 0 0 15px #0ff;
+        }
+    </style>
+</head>
+<body>
+    <!-- Three.js Canvas -->
+    <canvas id="bgCanvas"></canvas>
+    
+    <div id="ui">SCORE: <span id="score">0</span></div>
+    
+    <div id="leaderboard">
+        <div class="leaderboard-title">TOP SURVIVORS</div>
+        <div id="leaderboardList">Loading...</div>
+    </div>
+
+    <!-- 2D Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Game Over Modal -->
+    <div id="gameOverModal">
+        <h2>GAME OVER</h2>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <input type="text" id="playerName" placeholder="Enter your name" maxlength="15"><br>
+        <button id="submitScore">Submit Score</button>
+    </div>
+
+    <script>
+        // --- 3D Background with Three.js ---
+        const scene = new THREE.Scene();
+        // Add some fog for depth
+        scene.fog = new THREE.FogExp2(0x000000, 0.0015);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bgCanvas'), alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // Create a moving neon grid
+        const gridHelper = new THREE.GridHelper(2000, 50, 0x00ffff, 0x002222);
+        gridHelper.position.y = -100;
+        scene.add(gridHelper);
+        
+        const gridHelper2 = new THREE.GridHelper(2000, 50, 0xff00ff, 0x220022);
+        gridHelper2.position.y = 100; // ceiling grid
+        scene.add(gridHelper2);
+
+        camera.position.z = 200;
+        camera.position.y = 0;
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            // Move grids to create a sense of forward motion
+            gridHelper.position.z += 2;
+            if (gridHelper.position.z > 40) {
+                gridHelper.position.z = 0;
+            }
+            gridHelper2.position.z += 2;
+            if (gridHelper2.position.z > 40) {
+                gridHelper2.position.z = 0;
+            }
+            renderer.render(scene, camera);
+        }
+        animate3D();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 2D Game Logic ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d'); // Removed {alpha:true} initially, wait I need alpha:true because ThreeJS is behind
+        
+        // Wait, getting new context requires replacing the canvas element if it was already created, but this is a fresh page load.
+        // I need to use clearRect to maintain transparency so the 3D shows through. Let's fix that.
+    </script>
+    <script>
+        // Re-get context with alpha for transparency over Three.js
+        const canvas2d = document.getElementById('gameCanvas');
+        const ctx2d = canvas2d.getContext('2d');
+        const scoreElement = document.getElementById('score');
+
+        let width, height;
+        function resize2d() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas2d.width = width;
+            canvas2d.height = height;
+        }
+        window.addEventListener('resize', resize2d);
+        resize2d();
+
+        let mouse = { x: width / 2, y: height / 2 };
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        // Game state variables
+        let score = 0;
+        let player;
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        let lastTime = 0;
+        let enemySpawnTimer = 0;
+        let enemySpawnInterval = 1000;
+        let fireTimer = 0;
+        const fireInterval = 150;
+        let isGameOver = false;
+
+        class Vector {
+            constructor(x, y) { this.x = x; this.y = y; }
+            add(v) { return new Vector(this.x + v.x, this.y + v.y); }
+            sub(v) { return new Vector(this.x - v.x, this.y - v.y); }
+            mult(n) { return new Vector(this.x * n, this.y * n); }
+            mag() { return Math.sqrt(this.x * this.x + this.y * this.y); }
+            normalize() {
+                const m = this.mag();
+                return m === 0 ? new Vector(0, 0) : new Vector(this.x / m, this.y / m);
+            }
+            dist(v) { return this.sub(v).mag(); }
+        }
+
+        class Player {
+            constructor() {
+                this.pos = new Vector(width / 2, height / 2);
+                this.speed = 3;
+                this.size = 15;
+            }
+            update() {
+                const target = new Vector(mouse.x, mouse.y);
+                const dir = target.sub(this.pos);
+                if (dir.mag() > this.speed) {
+                    this.pos = this.pos.add(dir.normalize().mult(this.speed));
+                } else {
+                    this.pos = target;
+                }
+            }
+            draw() {
+                ctx2d.save();
+                ctx2d.translate(this.pos.x, this.pos.y);
+                const angle = Math.atan2(mouse.y - this.pos.y, mouse.x - this.pos.x);
+                ctx2d.rotate(angle);
+                ctx2d.strokeStyle = '#0ff';
+                ctx2d.lineWidth = 2;
+                ctx2d.shadowBlur = 15;
+                ctx2d.shadowColor = '#0ff';
+                ctx2d.beginPath();
+                ctx2d.moveTo(this.size, 0);
+                ctx2d.lineTo(-this.size, this.size);
+                ctx2d.lineTo(-this.size, -this.size);
+                ctx2d.closePath();
+                ctx2d.stroke();
+                ctx2d.restore();
+            }
+        }
+
+        class Enemy {
+            constructor() {
+                if (Math.random() < 0.5) {
+                    this.pos = new Vector(Math.random() < 0.5 ? -30 : width + 30, Math.random() * height);
+                } else {
+                    this.pos = new Vector(Math.random() * width, Math.random() < 0.5 ? -30 : height + 30);
+                }
+                this.size = 12;
+                this.speed = 1.5 + Math.random() * 1.5;
+            }
+            update(playerPos) {
+                const dir = playerPos.sub(this.pos).normalize();
+                this.pos = this.pos.add(dir.mult(this.speed));
+            }
+            draw() {
+                ctx2d.save();
+                ctx2d.translate(this.pos.x, this.pos.y);
+                ctx2d.strokeStyle = '#f00';
+                ctx2d.lineWidth = 2;
+                ctx2d.shadowBlur = 15;
+                ctx2d.shadowColor = '#f00';
+                ctx2d.beginPath();
+                ctx2d.rect(-this.size, -this.size, this.size * 2, this.size * 2);
+                ctx2d.stroke();
+                ctx2d.restore();
+            }
+        }
+
+        class Bullet {
+            constructor(pos, targetPos) {
+                this.pos = new Vector(pos.x, pos.y);
+                this.dir = targetPos.sub(this.pos).normalize();
+                this.speed = 10;
+                this.size = 4;
+                this.life = 100;
+            }
+            update() {
+                this.pos = this.pos.add(this.dir.mult(this.speed));
+                this.life--;
+            }
+            draw() {
+                ctx2d.save();
+                ctx2d.translate(this.pos.x, this.pos.y);
+                ctx2d.fillStyle = '#ff0';
+                ctx2d.shadowBlur = 15;
+                ctx2d.shadowColor = '#ff0';
+                ctx2d.beginPath();
+                ctx2d.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx2d.fill();
+                ctx2d.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y) {
+                this.pos = new Vector(x, y);
+                this.vel = new Vector((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
+                this.life = 20 + Math.random() * 20;
+                this.maxLife = this.life;
+                this.size = 1 + Math.random() * 3;
+            }
+            update() {
+                this.pos = this.pos.add(this.vel);
+                this.vel = this.vel.mult(0.9);
+                this.life--;
+            }
+            draw() {
+                ctx2d.save();
+                ctx2d.globalAlpha = this.life / this.maxLife;
+                ctx2d.translate(this.pos.x, this.pos.y);
+                ctx2d.fillStyle = '#f00';
+                ctx2d.shadowBlur = 10;
+                ctx2d.shadowColor = '#f00';
+                ctx2d.beginPath();
+                ctx2d.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx2d.fill();
+                ctx2d.restore();
+            }
+        }
+
+        function init() {
+            player = new Player();
+            enemies = [];
+            bullets = [];
+            particles = [];
+            score = 0;
+            enemySpawnInterval = 1000;
+            scoreElement.innerText = score;
+            lastTime = performance.now();
+            isGameOver = false;
+            document.getElementById('gameOverModal').style.display = 'none';
+            fetchScores();
+            requestAnimationFrame(loop);
+        }
+
+        function createExplosion(x, y) {
+            for (let i = 0; i < 20; i++) {
+                particles.push(new Particle(x, y));
+            }
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('gameOverModal').style.display = 'block';
+        }
+
+        document.getElementById('submitScore').addEventListener('click', () => {
+            const name = document.getElementById('playerName').value || 'Anonymous';
+            fetch('/api/scores', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, score })
+            }).then(() => {
+                init();
+            });
+        });
+
+        function fetchScores() {
+            fetch('/api/scores')
+                .then(res => res.json())
+                .then(data => {
+                    const list = document.getElementById('leaderboardList');
+                    list.innerHTML = '';
+                    if (data.length === 0) {
+                        list.innerHTML = '<div class="leaderboard-entry">No scores yet!</div>';
+                    }
+                    data.forEach((entry, i) => {
+                        list.innerHTML += `<div class="leaderboard-entry">${i+1}. ${entry.name} - ${entry.score}</div>`;
+                    });
+                })
+                .catch(() => {
+                    document.getElementById('leaderboardList').innerHTML = 'Backend not connected.';
+                });
+        }
+
+        function loop(time) {
+            if (isGameOver) return;
+            const dt = time - lastTime;
+            lastTime = time;
+
+            // Use clearRect so the 3D background is visible through the 2D canvas
+            ctx2d.clearRect(0, 0, width, height);
+
+            player.update();
+            player.draw();
+
+            enemySpawnTimer += dt;
+            if (enemySpawnTimer > enemySpawnInterval) {
+                enemies.push(new Enemy());
+                enemySpawnTimer = 0;
+                if (enemySpawnInterval > 200) {
+                    enemySpawnInterval -= 5; 
+                }
+            }
+
+            fireTimer += dt;
+            if (fireTimer > fireInterval && enemies.length > 0) {
+                let nearest = null;
+                let minDist = Infinity;
+                for (const enemy of enemies) {
+                    const dist = player.pos.dist(enemy.pos);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = enemy;
+                    }
+                }
+                
+                if (nearest) {
+                    bullets.push(new Bullet(player.pos, nearest.pos));
+                    fireTimer = 0;
+                }
+            }
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.update();
+                b.draw();
+                
+                if (b.life <= 0 || b.pos.x < 0 || b.pos.x > width || b.pos.y < 0 || b.pos.y > height) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                let bulletHit = false;
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    let e = enemies[j];
+                    if (b.pos.dist(e.pos) < e.size + b.size) {
+                        createExplosion(e.pos.x, e.pos.y);
+                        enemies.splice(j, 1);
+                        bulletHit = true;
+                        score += 10;
+                        scoreElement.innerText = score;
+                        break; 
+                    }
+                }
+                if (bulletHit) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                e.update(player.pos);
+                e.draw();
+
+                if (e.pos.dist(player.pos) < e.size + player.size - 5) {
+                    gameOver();
+                    return; 
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.update();
+                p.draw();
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        init();
+    </script>
+</body>
+</html>
