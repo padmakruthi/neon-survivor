@@ -51,7 +51,7 @@
             color: #fff;
             text-shadow: 0 0 10px #f0f;
             font-size: 18px;
-            pointer-events: none;
+            pointer-events: auto; /* Changed to auto so we can click the download button and scroll */
             user-select: none;
             z-index: 2;
             text-align: right;
@@ -59,6 +59,22 @@
             padding: 10px;
             border-radius: 5px;
             border: 1px solid #f0f;
+        }
+        #leaderboardList {
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            padding-right: 10px;
+        }
+        /* Style the scrollbar */
+        #leaderboardList::-webkit-scrollbar {
+            width: 5px;
+        }
+        #leaderboardList::-webkit-scrollbar-track {
+            background: #111; 
+        }
+        #leaderboardList::-webkit-scrollbar-thumb {
+            background: #f0f; 
         }
         .leaderboard-title {
             font-size: 20px;

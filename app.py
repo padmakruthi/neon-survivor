@@ -19,7 +19,7 @@ def index():
 def get_scores():
     conn = sqlite3.connect('scores.db')
     c = conn.cursor()
-    c.execute('SELECT name, score FROM scores ORDER BY score DESC LIMIT 10')
+    c.execute('SELECT name, score FROM scores ORDER BY score DESC')
     scores = [{'name': row[0], 'score': row[1]} for row in c.fetchall()]
     conn.close()
     return jsonify(scores)
