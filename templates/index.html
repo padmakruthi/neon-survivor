@@ -113,13 +113,39 @@
         #submitScore:hover {
             box-shadow: 0 0 15px #0ff;
         }
+        #exitBtn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background: transparent;
+            color: #f00;
+            border: 2px solid #f00;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            z-index: 2;
+            text-shadow: 0 0 5px #f00;
+            box-shadow: 0 0 10px #f00 inset, 0 0 10px #f00;
+            transition: 0.3s;
+        }
+        #exitBtn:hover {
+            background: #f00;
+            color: #000;
+        }
     </style>
 </head>
 <body>
     <!-- Three.js Canvas -->
     <canvas id="bgCanvas"></canvas>
     
-    <div id="ui">SCORE: <span id="score">0</span></div>
+    <div id="ui">
+        SCORE: <span id="score">0</span><br>
+        TIME: <span id="time">0</span>s
+    </div>
+    
+    <button id="exitBtn">EXIT</button>
     
     <div id="leaderboard">
         <div class="leaderboard-title">TOP SURVIVORS</div>
@@ -192,6 +218,7 @@
         const canvas2d = document.getElementById('gameCanvas');
         const ctx2d = canvas2d.getContext('2d');
         const scoreElement = document.getElementById('score');
+        const timeElement = document.getElementById('time');
 
         let width, height;
         function resize2d() {
@@ -211,6 +238,8 @@
 
         // Game state variables
         let score = 0;
+        let timeSurvived = 0;
+        let timeSurvivedMs = 0;
         let player;
         let enemies = [];
         let bullets = [];
@@ -355,8 +384,11 @@
             bullets = [];
             particles = [];
             score = 0;
+            timeSurvived = 0;
+            timeSurvivedMs = 0;
             enemySpawnInterval = 1000;
             scoreElement.innerText = score;
+            timeElement.innerText = timeSurvived;
             lastTime = performance.now();
             isGameOver = false;
             document.getElementById('gameOverModal').style.display = 'none';
@@ -375,6 +407,12 @@
             document.getElementById('finalScore').innerText = score;
             document.getElementById('gameOverModal').style.display = 'block';
         }
+
+        document.getElementById('exitBtn').addEventListener('click', () => {
+            if (!isGameOver) {
+                gameOver();
+            }
+        });
 
         document.getElementById('submitScore').addEventListener('click', () => {
             const name = document.getElementById('playerName').value || 'Anonymous';
@@ -409,6 +447,13 @@
             if (isGameOver) return;
             const dt = time - lastTime;
             lastTime = time;
+
+            timeSurvivedMs += dt;
+            let newTime = Math.floor(timeSurvivedMs / 1000);
+            if (newTime > timeSurvived) {
+                timeSurvived = newTime;
+                timeElement.innerText = timeSurvived;
+            }
 
             // Use clearRect so the 3D background is visible through the 2D canvas
             ctx2d.clearRect(0, 0, width, height);
