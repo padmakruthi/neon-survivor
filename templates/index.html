@@ -16,6 +16,7 @@
             overflow: hidden;
             font-family: 'Courier New', Courier, monospace;
             cursor: crosshair;
+            touch-action: none;
         }
         /* The Three.js canvas goes behind everything */
         #bgCanvas {
@@ -250,12 +251,33 @@
 
         let mouse = { x: width / 2, y: height / 2 };
         let isMouseDown = false;
+        
+        // Mouse Events
         window.addEventListener('mousemove', (e) => {
             mouse.x = e.clientX;
             mouse.y = e.clientY;
         });
         window.addEventListener('mousedown', () => isMouseDown = true);
         window.addEventListener('mouseup', () => isMouseDown = false);
+        
+        // Touch Events
+        window.addEventListener('touchstart', (e) => {
+            isMouseDown = true;
+            if(e.touches.length > 0) {
+                mouse.x = e.touches[0].clientX;
+                mouse.y = e.touches[0].clientY;
+            }
+        }, {passive: true});
+        
+        window.addEventListener('touchmove', (e) => {
+            if(e.touches.length > 0) {
+                mouse.x = e.touches[0].clientX;
+                mouse.y = e.touches[0].clientY;
+            }
+        }, {passive: true});
+        
+        window.addEventListener('touchend', () => isMouseDown = false);
+        window.addEventListener('touchcancel', () => isMouseDown = false);
 
         // Game state variables
         let score = 0;
