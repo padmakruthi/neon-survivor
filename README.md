@@ -1,6 +1,6 @@
 # Neon Survivor: https://neon-survivor-gamma.vercel.app/
 
-A fast-paced, retro-style "Survivor" game featuring neon wireframe visuals and a dynamic 3D background. Move your ship to avoid relentless enemies, automatically shoot them down, and survive as long as possible!
+A fast-paced, retro-style "Survivor" game featuring neon wireframe visuals and a dynamic 3D background. Move your ship to avoid relentless enemies, automatically shoot them down, and survive as long as possible!!
 
 ## Technologies Used
 
